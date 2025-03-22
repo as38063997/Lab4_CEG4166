@@ -13,7 +13,7 @@ recognizer.read('model.yml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 # E.g.: 1 is Jack, 2 is Jane and 3 is Jill
-name_data = ['none', 'Jack', 'Jane', 'Jill']
+name_data = ['none', 'Hans', 'Tony', 'Jill']
 # Initialize Picamera2
 picam2 = Picamera2()
 config = picam2.create_preview_configuration(main={"size": (640, 480)})
