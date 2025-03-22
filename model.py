@@ -1,51 +1,46 @@
 import cv2
 import numpy as np
+from PIL import Image
 import os
-import threading
 import time
 from picamera2 import Picamera2
+# Initialize Picamera2
+picam2 = Picamera2()
+config = picam2.create_still_configuration(main={"size": (640, 480)})
+picam2.configure(config)
+picam2.start()
+# Allow camera to warm up
+time.sleep(2)
+# Path for the face image database
+path = 'Dataset_Faces'
 # Load the face detection model
 cascadePath = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
 faceDetector = cv2.CascadeClassifier(cascadePath)
-
+# Initialize face recognizer
 recognizer = cv2.face.LBPHFaceRecognizer_create()
-recognizer.read('model.yml')
-font = cv2.FONT_HERSHEY_SIMPLEX
-
-# E.g.: 1 is Jack, 2 is Jane and 3 is Jill
-name_data = ['none', 'Jack', 'Jane', 'Jill']
-# Initialize Picamera2
-picam2 = Picamera2()
-config = picam2.create_preview_configuration(main={"size": (640, 480)})
-picam2.configure(config)
-picam2.start()
-
-time.sleep(2)
-def face_recognition(any1, any2):
-    while True:
- # Capture frame
-        img = picam2.capture_array()
+def training_function(path):
+    images_dataset = [os.path.join(path, char) for char in os.listdir(path) if
+    char.endswith('.jpg')]
+    number_faces = []
+    tags = []
+    for image_path in images_dataset:
  # Convert to grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        faces = faceDetector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5)
+        gray = Image.open(image_path).convert('L')
+        img_128D = np.array(gray, 'uint8')
+ # Extract the face ID from filename
+        face_id = int(os.path.split(image_path)[-1].split(".")[1])
+        faces = faceDetector.detectMultiScale(img_128D)
         for (x, y, w, h) in faces:
-            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            id, confidence = recognizer.predict(gray[y:y + h, x:x + w])
-            if confidence < 100:
-                id = name_data[id] if id < len(name_data) else "Unknown"
-                confidence_text = " {0}%".format(round(100 - confidence))
-            else:
-                id = "Unknown"
-                confidence_text = " {0}%".format(round(100 - confidence))
-            cv2.putText(img, str(id), (x + 5, y - 5), font, 1, (255, 255, 255), 2)
-            cv2.putText(img, str(confidence_text), (x + 5, y + h - 5), font, 1, (255, 255, 0), 1)
-        cv2.imshow('Stingray Face Detector', img)
-    # Exit on pressing 'ESC'
-        if cv2.waitKey(10) & 0xFF == 27:
-            break
-    print("\nExiting the program")
-    cv2.destroyAllWindows()
-    picam2.stop()
-
-faceRecognitionThread = threading.Thread(target=face_recognition, args=('anything1', 'anything2'))
-faceRecognitionThread.start()
+            number_faces.append(img_128D[y:y + h, x:x + w])
+            tags.append(face_id)
+    return number_faces, tags
+faces, tags = training_function(path)
+if len(faces) > 0:
+    recognizer.train(faces, np.array(tags))
+ # Save the trained model
+    recognizer.write('model.yml')
+    print("\n {0} Faces training done".format(len(np.unique(tags))))
+else:
+    print("\n No faces found for training.")
+# Cleanup
+picam2.stop()
